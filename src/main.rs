@@ -4,6 +4,7 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     path::{Path, PathBuf},
+    time::Instant,
 };
 use xml::{reader::XmlEvent, EventReader};
 
@@ -77,13 +78,32 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 fn main() -> Result<()> {
+    let file: TermFreqIndex = serde_json::from_reader(File::open("./assets/index.json")?)?;
+
+    println!("index.json contains {} files", file.len());
+    Ok(())
+}
+
+fn main1() -> Result<()> {
     let dir = Path::new("../docs.gl/gl4");
 
-    let doc_tf = read_xml_in_dir(&dir)?;
-    for (path, tf) in doc_tf {
-        println!("\n{:?}", path);
-        println!("{:?}", tf.len());
-    }
+    let index_start = Instant::now();
+    let tf_index = read_xml_in_dir(&dir)?;
+    println!("\n---------------------------------------\n");
+    println!("Indexed costs {:?}", index_start.elapsed());
+
+    let dump_file_path = "assets/index.json";
+
+    let save_start = Instant::now();
+    serde_json::to_writer_pretty(File::create(dump_file_path)?, &tf_index)?;
+    println!(
+        "Saving to {dump_file_path:?} costs {:?}",
+        save_start.elapsed()
+    );
+
+    // for (path, tf) in tf_index {
+    //     println!("{:?} has {} terms", path, tf.len());
+    // }
 
     // println!("{content}", content = read_xml(dir)?);
 
@@ -97,10 +117,10 @@ fn index_document(content: &str) -> TermFreq {
     for token in Lexer::new(&chars) {
         let term = token
             .iter()
-            // .map(|c| c.to_ascii_uppercase())
             .collect::<String>()
             .trim()
-            .to_owned();
+            .to_owned()
+            .to_uppercase();
 
         if term.is_empty() || term.chars().all(|c| c.is_ascii_punctuation()) {
             // ignore empty and punctuations
@@ -132,7 +152,7 @@ fn read_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
             if ext == "xhtml" {
                 let content = read_xml(&filepath)?;
 
-                println!("indexing {:?}", filepath);
+                println!("Indexing {:?}...", filepath);
                 let tf = index_document(&content);
                 let key = filepath;
 

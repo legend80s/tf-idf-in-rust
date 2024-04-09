@@ -2,10 +2,13 @@ use anyhow::Result;
 use core::str;
 use std::{
     collections::HashMap,
+    env::args,
     fs::{self, File},
     path::{Path, PathBuf},
+    process::ExitCode,
     time::Instant,
 };
+use tiny_http::{Header, Method, Request, Response};
 use xml::{reader::XmlEvent, EventReader};
 
 type TermFreq = HashMap<String, usize>;
@@ -77,25 +80,114 @@ impl<'a> Iterator for Lexer<'a> {
     }
 }
 
-fn main() -> Result<()> {
+fn search() -> Result<()> {
     let file: TermFreqIndex = serde_json::from_reader(File::open("./assets/index.json")?)?;
 
     println!("index.json contains {} files", file.len());
     Ok(())
 }
 
-fn main1() -> Result<()> {
-    let dir = Path::new("../docs.gl/gl4");
+fn serve_static_file(request: Request, filepath: &str, content_type: &str) -> Result<()> {
+    let html = File::open(filepath).expect("file not exists");
+    let response = Response::from_file(html).with_header(
+        Header::from_bytes("content-type", content_type).expect("should not failed on headers"),
+    );
+    request.respond(response)?;
+
+    Ok(())
+}
+
+fn serve(request: Request) -> Result<()> {
+    println!(
+        "INFO: received request! method: {:?}, url: {:?}",
+        request.method(),
+        request.url()
+    );
+
+    match (request.method(), request.url()) {
+        (Method::Get, "/" | "/index.html" | "/index") => {
+            serve_static_file(request, "./public/index.html", "text/html; charset=UTF-8")?
+        }
+        (Method::Get, "/index.js") => serve_static_file(
+            request,
+            "./public/index.js",
+            "text/javascript; charset=UTF-8",
+        )?,
+        _ => {
+            let not_found_html = File::open("./public/404.html").expect("file not exists");
+            request.respond(Response::from_file(not_found_html).with_status_code(404))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// cargo run index <dir>
+/// cargo run search <dir>
+/// cargo run serve
+fn entry() -> Result<()> {
+    let mut args = args();
+
+    let program = args.next().expect("the program not gonna empty");
+
+    let sub_command = args
+        .next()
+        .ok_or_else(|| {
+            usage(&program);
+            eprintln!("ERROR: no subCommand is provided");
+        })
+        .unwrap();
+
+    match sub_command.as_str() {
+        "index" => {
+            let dir = args.next().unwrap_or("../docs.gl/gl4".to_string());
+            index(&dir)?
+        }
+        "search" => search()?,
+        "serve" => {
+            let server = tiny_http::Server::http("0.0.0.0:8080").unwrap();
+
+            println!("INFO: listening at http://{}", server.server_addr());
+
+            for request in server.incoming_requests() {
+                serve(request)?
+            }
+        }
+        _ => {
+            usage(&program);
+            eprintln!("ERROR: unknown subcommand: {sub_command}");
+        }
+    }
+    Ok(())
+}
+
+fn usage(program: &str) {
+    eprintln!("Usage {program} <SUBCOMMAND> [OPTIONS]");
+    eprintln!("Subcommands:");
+    eprintln!("    index <folder>       Indexing files under folder and save to index.json");
+    eprintln!("    search <index-file>   Check how many documents are indexed");
+    eprintln!("    serve                Start HTTP server with web interface");
+}
+
+fn main() -> ExitCode {
+    match entry() {
+        core::result::Result::Ok(_) => ExitCode::SUCCESS,
+        Err(_) => ExitCode::FAILURE,
+    }
+}
+
+fn index(dir: &str) -> Result<()> {
+    let dir = Path::new(dir);
 
     let index_start = Instant::now();
-    let tf_index = read_xml_in_dir(&dir)?;
+    let tf_index = parse_xml_in_dir(&dir)?;
     println!("\n---------------------------------------\n");
-    println!("Indexed costs {:?}", index_start.elapsed());
+    println!("Indexed {:?} costs {:?}", dir, index_start.elapsed());
 
     let dump_file_path = "assets/index.json";
 
     let save_start = Instant::now();
-    serde_json::to_writer_pretty(File::create(dump_file_path)?, &tf_index)?;
+    serde_json::to_writer(File::create(dump_file_path)?, &tf_index)?;
     println!(
         "Saving to {dump_file_path:?} costs {:?}",
         save_start.elapsed()
@@ -141,13 +233,13 @@ fn index_document(content: &str) -> TermFreq {
     // }
 }
 
-fn read_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
+fn parse_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
     let mut term_freq_index = TermFreqIndex::new();
     for file in fs::read_dir(dir)? {
         let filepath = file?.path();
 
         if filepath.is_dir() {
-            let _ = read_xml_in_dir(&filepath);
+            let _ = parse_xml_in_dir(&filepath);
         } else if let Some(ext) = filepath.extension() {
             if ext == "xhtml" {
                 let content = read_xml(&filepath)?;

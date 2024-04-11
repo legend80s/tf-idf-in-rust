@@ -35,7 +35,7 @@ impl<'a> Lexer<'a> {
         P: FnMut(&[char], usize) -> bool,
     {
         let mut n = 0;
-        while self.content.len() != 0 && predicate(self.content, n) {
+        while n < self.content.len() && predicate(self.content, n) {
             n += 1;
         }
 
@@ -73,10 +73,12 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = &'a [char];
+    type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_token()
+            .map(|ch| ch.iter().collect())
+            .map(|ch: String| ch.to_ascii_uppercase())
     }
 }
 
@@ -97,7 +99,14 @@ fn serve_static_file(request: Request, filepath: &str, content_type: &str) -> Re
     Ok(())
 }
 
-fn serve(request: Request) -> Result<()> {
+fn serve_404(request: Request) -> Result<()> {
+    let not_found_html = File::open("./public/404.html").expect("file not exists");
+    request.respond(Response::from_file(not_found_html).with_status_code(404))?;
+
+    Ok(())
+}
+
+fn serve(mut request: Request) -> Result<()> {
     println!(
         "INFO: received request! method: {:?}, url: {:?}",
         request.method(),
@@ -105,6 +114,18 @@ fn serve(request: Request) -> Result<()> {
     );
 
     match (request.method(), request.url()) {
+        (Method::Post, "/api/search") => {
+            let mut body = String::new();
+            request.as_reader().read_to_string(&mut body)?;
+
+            println!("INFO: searching {body}");
+
+            for term in Lexer::new(&body.chars().collect::<Vec<_>>()) {
+                println!("{term}")
+            }
+
+            request.respond(Response::from_string(body))?
+        }
         (Method::Get, "/" | "/index.html" | "/index") => {
             serve_static_file(request, "./public/index.html", "text/html; charset=UTF-8")?
         }
@@ -113,10 +134,7 @@ fn serve(request: Request) -> Result<()> {
             "./public/index.js",
             "text/javascript; charset=UTF-8",
         )?,
-        _ => {
-            let not_found_html = File::open("./public/404.html").expect("file not exists");
-            request.respond(Response::from_file(not_found_html).with_status_code(404))?;
-        }
+        _ => serve_404(request)?,
     }
 
     Ok(())
@@ -158,6 +176,7 @@ fn entry() -> Result<()> {
             eprintln!("ERROR: unknown subcommand: {sub_command}");
         }
     }
+
     Ok(())
 }
 
@@ -207,12 +226,7 @@ fn index_document(content: &str) -> TermFreq {
     let mut tf = TermFreq::new();
 
     for token in Lexer::new(&chars) {
-        let term = token
-            .iter()
-            .collect::<String>()
-            .trim()
-            .to_owned()
-            .to_uppercase();
+        let term = token.trim().to_owned();
 
         if term.is_empty() || term.chars().all(|c| c.is_ascii_punctuation()) {
             // ignore empty and punctuations

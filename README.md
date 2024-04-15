@@ -4,8 +4,16 @@ A local search engine use TF-IDF algorithm in Rust!
 
 the searching materials are from <https://github.com/BSVino/docs.gl>
 
-It contains
+## Technical Details
+
+It contains:
 
 - a `Lexer` for word segmentation use `xml-rs` and
 - `model` for calculating TF-IDF.
-- a web interface for searching use `tiny_http`
+- a web interface for searching use `tiny_http` with input and results dispaying and a `/api/search` API.
+
+And it's a CLI app hand-made without `clap` and with subcommands:
+
+- index
+- serve
+

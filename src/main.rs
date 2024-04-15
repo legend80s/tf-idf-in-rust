@@ -1,7 +1,7 @@
 use anyhow::Result;
 use core::str;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     env::args,
     fs::{self, File},
     path::{Path, PathBuf},
@@ -11,7 +11,8 @@ use std::{
 use tiny_http::{Header, Method, Request, Response};
 use xml::{reader::XmlEvent, EventReader};
 
-type TermFreq = HashMap<String, usize>;
+// use BTreeMap for key sorted alphabetically
+type TermFreq = BTreeMap<String, usize>;
 type TermFreqIndex = HashMap<PathBuf, TermFreq>;
 
 struct Lexer<'a> {
@@ -76,16 +77,33 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_token()
+        let term = self
+            .next_token()
             .map(|ch| ch.iter().collect())
-            .map(|ch: String| ch.to_ascii_uppercase())
+            .map(|ch: String| ch.to_ascii_uppercase().trim().to_string());
+
+        term
     }
 }
 
-fn search() -> Result<()> {
-    let file: TermFreqIndex = serde_json::from_reader(File::open("./assets/index.json")?)?;
+fn is_word(term: &str) -> bool {
+    if term.is_empty() || term.chars().all(|c| c.is_ascii_punctuation()) {
+        return false;
+    }
 
-    println!("index.json contains {} files", file.len());
+    true
+}
+
+fn read_term_freq_index_from_file() -> Result<TermFreqIndex> {
+    let tf_index: TermFreqIndex = serde_json::from_reader(File::open("./assets/index.json")?)?;
+
+    Ok(tf_index)
+}
+
+fn search() -> Result<()> {
+    let tf_index: TermFreqIndex = read_term_freq_index_from_file()?;
+
+    println!("index.json contains {} files", tf_index.len());
     Ok(())
 }
 
@@ -106,9 +124,39 @@ fn serve_404(request: Request) -> Result<()> {
     Ok(())
 }
 
+fn calc_tf(term: &str, doc: &TermFreq) -> f32 {
+    let count = *doc.get(term).unwrap_or(&0);
+    let total: usize = doc.values().sum();
+
+    count as f32 / total as f32
+}
+
+fn calc_idf(term: &str, tf_index: &TermFreqIndex) -> f32 {
+    let total_docs = tf_index.len();
+    let docs_contains_item = tf_index
+        .values()
+        .filter(|doc| doc.contains_key(term))
+        .count()
+        // fix negative f32
+        .max(1);
+
+    // println!("total_docs: {}", total_docs);
+    // println!("docs_contains_item: {}", docs_contains_item);
+
+    let n = total_docs;
+    let m = docs_contains_item;
+
+    // fix negative f32
+    // if docs_contains_item == 0 {
+    //     m = docs_contains_item + 1
+    // }
+
+    (n as f32 / m as f32).log10()
+}
+
 fn serve(mut request: Request) -> Result<()> {
     println!(
-        "INFO: received request! method: {:?}, url: {:?}",
+        "INFO: method: {:?}, url: {:?}",
         request.method(),
         request.url()
     );
@@ -120,12 +168,37 @@ fn serve(mut request: Request) -> Result<()> {
 
             println!("INFO: searching {body}");
 
-            for term in Lexer::new(&body.chars().collect::<Vec<_>>()) {
-                println!("{term}")
+            let mut result: Vec<(&PathBuf, f32)> = Vec::new();
+            let tf_index = read_term_freq_index_from_file()?;
+
+            for (path, doc) in &tf_index {
+                let mut rank = 0f32;
+                for term in Lexer::new(&body.chars().collect::<Vec<_>>()) {
+                    if is_word(&term) {
+                        // println!("{term}");
+                        rank += calc_tf(&term, &doc) * calc_idf(&term, &tf_index);
+                    }
+                }
+
+                result.push((path, rank));
             }
 
-            request.respond(Response::from_string(body))?
+            result.sort_by(|(_, rank1), (_, rank2)| {
+                rank2
+                    .partial_cmp(rank1)
+                    .expect(&format!("{rank1} and {rank2} are not comparable"))
+            });
+
+            let mut vec = Vec::new();
+
+            for (doc, rank) in result.iter().take(10) {
+                vec.push(format!("{:?} => {}", doc, rank));
+                println!("{:?} => {}", doc, rank);
+            }
+
+            request.respond(Response::from_string(vec.join("\n")))?
         }
+
         (Method::Get, "/" | "/index.html" | "/index") => {
             serve_static_file(request, "./public/index.html", "text/html; charset=UTF-8")?
         }
@@ -158,7 +231,7 @@ fn entry() -> Result<()> {
 
     match sub_command.as_str() {
         "index" => {
-            let dir = args.next().unwrap_or("../docs.gl/gl4".to_string());
+            let dir = args.next().unwrap_or("../docs.gl/".to_string());
             index(&dir)?
         }
         "search" => search()?,
@@ -201,12 +274,19 @@ fn index(dir: &str) -> Result<()> {
     let index_start = Instant::now();
     let tf_index = parse_xml_in_dir(&dir)?;
     println!("\n---------------------------------------\n");
-    println!("Indexed {:?} costs {:?}", dir, index_start.elapsed());
+    println!(
+        "Indexed folder {:?} of {} files costs {:?}",
+        dir,
+        tf_index.len(),
+        index_start.elapsed()
+    );
 
     let dump_file_path = "assets/index.json";
 
     let save_start = Instant::now();
     serde_json::to_writer(File::create(dump_file_path)?, &tf_index)?;
+    // serde_json::to_writer_pretty(File::create(dump_file_path)?, &tf_index)?;
+
     println!(
         "Saving to {dump_file_path:?} costs {:?}",
         save_start.elapsed()
@@ -225,12 +305,8 @@ fn index_document(content: &str) -> TermFreq {
     let chars = content.trim().chars().collect::<Vec<_>>();
     let mut tf = TermFreq::new();
 
-    for token in Lexer::new(&chars) {
-        let term = token.trim().to_owned();
-
-        if term.is_empty() || term.chars().all(|c| c.is_ascii_punctuation()) {
-            // ignore empty and punctuations
-        } else {
+    for term in Lexer::new(&chars) {
+        if is_word(&term) {
             let count = tf.entry(term).or_insert(0);
             *count += 1
         }
@@ -247,24 +323,45 @@ fn index_document(content: &str) -> TermFreq {
     // }
 }
 
-fn parse_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
-    let mut term_freq_index = TermFreqIndex::new();
+fn walk_file<P>(dir: &Path, predicate: P) -> Result<Vec<PathBuf>>
+where
+    P: Fn(&PathBuf) -> bool + std::clone::Clone,
+{
+    let mut files = Vec::new();
+
     for file in fs::read_dir(dir)? {
         let filepath = file?.path();
 
         if filepath.is_dir() {
-            let _ = parse_xml_in_dir(&filepath);
-        } else if let Some(ext) = filepath.extension() {
-            if ext == "xhtml" {
-                let content = read_xml(&filepath)?;
-
-                println!("Indexing {:?}...", filepath);
-                let tf = index_document(&content);
-                let key = filepath;
-
-                term_freq_index.insert(key, tf);
-            }
+            let mut sub = walk_file(&filepath, predicate.clone())?;
+            files.append(&mut sub);
+        } else if predicate(&filepath) {
+            files.push(filepath);
         }
+    }
+
+    return Ok(files);
+}
+
+fn parse_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
+    let mut term_freq_index = TermFreqIndex::new();
+
+    let files = walk_file(dir, |fp| {
+        if let Some(ext) = fp.extension() {
+            return ext == "xhtml";
+        }
+
+        false
+    })?;
+
+    for filepath in files {
+        let content = read_xml(&filepath)?;
+
+        println!("Indexing {:?}...", filepath);
+        let tf = index_document(&content);
+        let key = filepath;
+
+        term_freq_index.insert(key, tf);
     }
 
     Ok(term_freq_index)

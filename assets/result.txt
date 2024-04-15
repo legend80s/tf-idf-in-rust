@@ -1,0 +1,20 @@
+bind, to buffer.
+  "../docs.gl/es3/glBindVertexBuffer.xhtml" => 0.049933348 4 19
+  "../docs.gl/gl3/glBindBufferBase.xhtml" => 0.040768318 3 15
+  "../docs.gl/gl4/glBindVertexBuffer.xhtml" => 0.03887783 5 24
+  "../docs.gl/gl4/glTransformFeedbackBufferBase.xhtml" => 0.037670195 2 12
+  "../docs.gl/es3/glBindBufferBase.xhtml" => 0.03526502 3 17
+
+bind texture, to buffer.
+  "../docs.gl/es1/glBindTexture.xhtml" => 0.063127466
+  "../docs.gl/gl3/glBindTexture.xhtml" => 0.060705088
+  "../docs.gl/es3/glBindTexture.xhtml" => 0.05918222
+  "../docs.gl/es2/glBindTexture.xhtml" => 0.05903645
+  "../docs.gl/gl4/glBindTexture.xhtml" => 0.058661737
+
+glsl function for linear interpolation
+  "../docs.gl/el3/smoothstep.xhtml" => 0.041792136
+  "../docs.gl/sl4/smoothstep.xhtml" => 0.03669075
+  "../docs.gl/es1/glHint.xhtml" => 0.02432217
+  "../docs.gl/gl2/gluPwlCurve.xhtml" => 0.022442196
+  "../docs.gl/el3/mix.xhtml" => 0.01896372

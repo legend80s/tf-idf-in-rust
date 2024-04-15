@@ -56,3 +56,22 @@ sorting costs: 3.376042ms
 #### release  without cache df
 
   2s
+
+#### release with cache
+
+  123ms
+INFO: searching glsl function hello linealy interpolation
+read_term_freq_index_from_file costs: 100.570125ms
+calculate tf-idf costs: 9.988667ms
+sorting costs: 2.775084ms
+
+"../docs.gl/el3/smoothstep.xhtml" => 0.041195642
+"../docs.gl/sl4/smoothstep.xhtml" => 0.036167063
+"../docs.gl/es1/glHint.xhtml" => 0.019645251
+"../docs.gl/gl2/glHint.xhtml" => 0.014087771
+"../docs.gl/el3/mix.xhtml" => 0.011210989
+"../docs.gl/gl3/glBlitFramebuffer.xhtml" => 0.009733891
+"../docs.gl/es2/glGetString.xhtml" => 0.009056542
+"../docs.gl/es3/glBlitFramebuffer.xhtml" => 0.009045778
+"../docs.gl/el3/step.xhtml" => 0.008715669
+"../docs.gl/gl2/gluNurbsCallback.xhtml" => 0.008667868

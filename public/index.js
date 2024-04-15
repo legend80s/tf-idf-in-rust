@@ -5,6 +5,7 @@
   document.querySelector('#submit').addEventListener('submit', (event) => {
     event.preventDefault();
 
+    output.innerHTML = '<p>Loading...</p>';
     postJSON(input.value);
   });
 

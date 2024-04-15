@@ -4,6 +4,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     env::args,
     fs::{self, File},
+    io::{BufReader, BufWriter},
     path::{Path, PathBuf},
     process::ExitCode,
     time::Instant,
@@ -284,7 +285,7 @@ fn index(dir: &str) -> Result<()> {
     let dump_file_path = "assets/index.json";
 
     let save_start = Instant::now();
-    serde_json::to_writer(File::create(dump_file_path)?, &tf_index)?;
+    serde_json::to_writer(BufWriter::new(File::create(dump_file_path)?), &tf_index)?;
     // serde_json::to_writer_pretty(File::create(dump_file_path)?, &tf_index)?;
 
     println!(
@@ -368,7 +369,7 @@ fn parse_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
 }
 
 fn read_xml(filepath: &PathBuf) -> Result<String> {
-    let parser = EventReader::new(File::open(filepath)?);
+    let parser = EventReader::new(BufReader::new(File::open(filepath)?));
     let mut content = String::new();
 
     for event in parser {

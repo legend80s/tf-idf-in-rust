@@ -26,7 +26,14 @@ target/release/tf-idf-in-rust index  1.00s user 0.06s system 64% cpu 1.648 total
 
 ### search
 
-debug
-  8s
-release
+#### debug
+
+8s
+
+- read_term_freq_index_from_file costs: 1.449056125s
+- calculate tf-idf costs: 6.419089708s
+- sorting costs: 4.569167ms
+
+#### release
+
   2s

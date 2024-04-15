@@ -4,7 +4,7 @@ A local search engine use TF-IDF algorithm in Rust!
 
 the searching materials are from <https://github.com/BSVino/docs.gl>
 
-## Technical layers
+## Technical Details
 
 It contains:
 

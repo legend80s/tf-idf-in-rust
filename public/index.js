@@ -1,5 +1,6 @@
 {
   const input = document.querySelector('#query');
+  const output = document.querySelector('#output');
 
   document.querySelector('#submit').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -30,7 +31,8 @@
         return p;
       });
 
-      document.querySelector('#output').append(...ps);
+      output.innerHTML = '';
+      output.append(...ps);
     } catch (error) {
       console.error('Error:', error);
     }

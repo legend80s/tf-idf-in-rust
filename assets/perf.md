@@ -26,14 +26,33 @@ target/release/tf-idf-in-rust index  1.00s user 0.06s system 64% cpu 1.648 total
 
 ### search
 
-#### debug
+`gsls function linearly interpolation`
 
-8s
+#### debug without cache df
 
-- read_term_freq_index_from_file costs: 1.449056125s
-- calculate tf-idf costs: 6.419089708s
-- sorting costs: 4.569167ms
+INFO: searching gsls function linearly interpolation
+read_term_freq_index_from_file costs: 457.0605ms
+calculate tf-idf costs: 4.53351175s
+sorting costs: 3.420166ms
 
-#### release
+INFO: searching gsls function linearly interpolation
+read_term_freq_index_from_file costs: 460.264417ms
+calculate tf-idf costs: 77.582ms
+sorting costs: 3.376042ms
+
+"../docs.gl/el3/smoothstep.xhtml" => 0.041195642
+"../docs.gl/sl4/smoothstep.xhtml" => 0.036167063
+"../docs.gl/es1/glHint.xhtml" => 0.019645251
+"../docs.gl/el3/mix.xhtml" => 0.01881235
+"../docs.gl/gl2/glHint.xhtml" => 0.014087771
+"../docs.gl/sl4/mix.xhtml" => 0.013692923
+"../docs.gl/gl2/glGetMaterial.xhtml" => 0.011883816
+"../docs.gl/gl3/glBlitFramebuffer.xhtml" => 0.009733891
+"../docs.gl/es3/glBlitFramebuffer.xhtml" => 0.009045778
+"../docs.gl/el3/step.xhtml" => 0.008715669
+
+#### debug with cache df
+
+#### release  without cache df
 
   2s

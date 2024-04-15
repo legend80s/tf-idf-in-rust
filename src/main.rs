@@ -8,9 +8,7 @@ use std::{
     process::ExitCode,
     time::Instant,
 };
-use tf_idf_in_rust::{
-    calc_idf, calc_tf, read_term_freq_index_from_file, Lexer, TermFreq, TermFreqIndex,
-};
+use tf_idf_in_rust::{calc_idf, calc_tf, read_term_freq_index_from_file, Lexer, Model, TermFreq};
 use tiny_http::{Header, Method, Request, Response};
 use xml::{reader::XmlEvent, EventReader};
 
@@ -23,9 +21,9 @@ fn is_word(term: &str) -> bool {
 }
 
 fn search() -> Result<()> {
-    let tf_index: TermFreqIndex = read_term_freq_index_from_file()?;
+    let model = read_term_freq_index_from_file()?;
 
-    println!("index.json contains {} files", tf_index.len());
+    println!("index.json contains {} files", model.tfpd.len());
     Ok(())
 }
 
@@ -62,19 +60,20 @@ fn serve(mut request: Request) -> Result<()> {
 
             let mut result: Vec<(&PathBuf, f32)> = Vec::new();
             let start = Instant::now();
-            let tf_index = read_term_freq_index_from_file()?;
+            let model = read_term_freq_index_from_file()?;
             println!(
                 "read_term_freq_index_from_file costs: {:?}",
                 start.elapsed()
             );
 
             let start_calc = Instant::now();
-            for (path, doc) in &tf_index {
+
+            for (path, doc) in &model.tfpd {
                 let mut rank = 0f32;
                 for term in Lexer::new(&body.chars().collect::<Vec<_>>()) {
                     if is_word(&term) {
                         // println!("{term}");
-                        rank += calc_tf(&term, &doc) * calc_idf(&term, &tf_index);
+                        rank += calc_tf(&term, &doc) * calc_idf(&term, &model);
                     }
                 }
 
@@ -172,20 +171,20 @@ fn index(dir: &str) -> Result<()> {
     let dir = Path::new(dir);
 
     let index_start = Instant::now();
-    let tf_index = parse_xml_in_dir(&dir)?;
+    let model = parse_xml_in_dir(&dir)?;
     println!("\n---------------------------------------\n");
     println!(
         "Indexed folder {:?} of {} files costs {:?}",
         dir,
-        tf_index.len(),
+        model.tfpd.len(),
         index_start.elapsed()
     );
 
     let dump_file_path = "assets/index.json";
 
     let save_start = Instant::now();
-    serde_json::to_writer(BufWriter::new(File::create(dump_file_path)?), &tf_index)?;
-    // serde_json::to_writer_pretty(File::create(dump_file_path)?, &tf_index)?;
+    serde_json::to_writer(BufWriter::new(File::create(dump_file_path)?), &model)?;
+    // serde_json::to_writer_pretty(BufWriter::new(File::create(dump_file_path)?), &model)?;
 
     println!(
         "Saving to {dump_file_path:?} costs {:?}",
@@ -208,7 +207,7 @@ fn index_document(content: &str) -> TermFreq {
     for term in Lexer::new(&chars) {
         if is_word(&term) {
             let count = tf.entry(term).or_insert(0);
-            *count += 1
+            *count += 1;
         }
     }
 
@@ -243,8 +242,8 @@ where
     return Ok(files);
 }
 
-fn parse_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
-    let mut term_freq_index = TermFreqIndex::new();
+fn parse_xml_in_dir(dir: &Path) -> Result<Model> {
+    let mut model = Model::new();
 
     let files = walk_file(dir, |fp| {
         if let Some(ext) = fp.extension() {
@@ -261,10 +260,17 @@ fn parse_xml_in_dir(dir: &Path) -> Result<TermFreqIndex> {
         let tf = index_document(&content);
         let key = filepath;
 
-        term_freq_index.insert(key, tf);
+        model.tfpd.insert(key, tf);
     }
 
-    Ok(term_freq_index)
+    for terms in model.tfpd.values() {
+        for (term, _) in terms {
+            let count = model.df.entry(term.to_string()).or_insert(0);
+            *count += 1;
+        }
+    }
+
+    Ok(model)
 }
 
 fn read_xml(filepath: &PathBuf) -> Result<String> {

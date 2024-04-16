@@ -13,7 +13,7 @@ use tiny_http::{Header, Method, Request, Response};
 use xml::{reader::XmlEvent, EventReader};
 
 fn is_word(term: &str) -> bool {
-    if term.is_empty() || term.chars().all(|c| c.is_ascii_punctuation()) {
+    if term.chars().all(|c| c.is_ascii_punctuation()) {
         return false;
     }
 

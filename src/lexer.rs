@@ -26,8 +26,15 @@ impl<'a> Lexer<'a> {
         return self.chop(n);
     }
 
+    fn trim_left(&mut self) {
+        self.chop_while(|content, idx| content[idx].is_ascii_whitespace());
+    }
+
     fn next_token(&mut self) -> Option<&'a [char]> {
-        if self.content.len() == 0 {
+        // avoid empty spaces
+        self.trim_left();
+
+        if self.content.is_empty() {
             return None;
         }
 
@@ -63,8 +70,42 @@ impl<'a> Iterator for Lexer<'a> {
         let term = self
             .next_token()
             .map(|ch| ch.iter().collect())
-            .map(|ch: String| ch.to_ascii_uppercase().trim().to_string());
+            .map(|ch: String| ch.to_ascii_uppercase().to_string());
 
         term
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Lexer;
+
+    #[test]
+    fn should_work() {
+        let mut vec = Vec::new();
+        for token in Lexer::new(
+            &"hello 123 1.23 gl4 GL_INVALID_VALUE, who  are you! ✅"
+                .chars()
+                .collect::<Vec<_>>(),
+        ) {
+            vec.push(token);
+        }
+
+        assert_eq!(
+            vec,
+            vec![
+                "HELLO",
+                "123",
+                "1.23",
+                "GL4",
+                "GL_INVALID_VALUE",
+                ",",
+                "WHO",
+                "ARE",
+                "YOU",
+                "!",
+                "✅"
+            ]
+        );
     }
 }

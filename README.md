@@ -14,6 +14,11 @@ It contains:
 
 And it's a CLI app hand-made without `clap` and with subcommands:
 
-- index
-- serve
+- index - Indexing tf-idf into json file.
+- serve - Start a local server with web interface for searching.
 
+## Start
+
+1 git clone this repo
+2 `cargo run index`
+3 `cargo run serve`
